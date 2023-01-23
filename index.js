@@ -1,0 +1,104 @@
+require('dotenv').config();
+
+const express = require('express');
+const { connectToDb, getDb } = require('./db');
+const { ObjectId } = require('mongodb');
+// init application and middleware here...
+const app = express();
+app.use(express.json());
+const port = 3000;
+
+// db conection
+let db;
+connectToDb((err) => {
+  if (!err) {
+    app.listen(port, () => {
+      console.log(
+        `Express app designed to connect to MongoDB Atlas, we are on port ${port}`
+      );
+    });
+    db = getDb();
+  }
+});
+
+// routes go here...
+
+app.get('/books', (req, res) => {
+  const page = req.query.p || 0;
+  const booksPerPage = 3;
+
+  let books = [];
+  // the find method will return a cursor - an object that points to documents outlined by the query
+  db.collection('books')
+    .find()
+    .sort({ author: 1 })
+    .skip(page * booksPerPage)
+    .limit(booksPerPage)
+    .forEach((book) => books.push(book))
+    .then(() => {
+      res.status(200).json(books);
+    })
+    .catch((err) => {
+      res.status(500).json({ error: 'Could not fetch the documents' });
+    });
+});
+
+app.get('/books/:id', (req, res) => {
+  if (ObjectId.isValid(req.params.id)) {
+    db.collection('books')
+      .findOne({
+        _id: ObjectId(req.params.id),
+      })
+      .then((doc) => {
+        res.status(200).json(doc);
+      })
+      .catch((err) => {
+        res.status(500).json({ error: 'Could not fetch doc' });
+      });
+  } else {
+    res.status(500).json({ error: 'Not a valid id' });
+  }
+});
+
+app.post('/books', (req, res) => {
+  const book = req.body;
+  db.collection('books')
+    .insertOne(book)
+    .then((result) => {
+      res.status(201).json(result);
+    })
+    .catch((err) => {
+      res.status(500).json({ err: 'Could not create a new document' });
+    });
+});
+
+app.delete('/books/:id', (req, res) => {
+  if (ObjectId.isValid(req.params.id)) {
+    db.collection('books')
+      .deleteOne({ _id: ObjectId(req.params.id) })
+      .then((result) => {
+        res.status(200).json(result);
+      })
+      .catch((err) => {
+        res.status(500).json({ error: 'Could not delete document' });
+      });
+  } else {
+    res.status(500).json({ error: 'Not a valid document id' });
+  }
+});
+
+app.patch('/books/:id', (req, res) => {
+  const updates = req.body;
+  if (ObjectId.isValid(req.params.id)) {
+    db.collection('books')
+      .updateOne({ _id: ObjectId(req.params.id) }, { $set: updates })
+      .then((result) => {
+        res.status(200).json(result);
+      })
+      .catch((err) => {
+        res.status(500).json({ error: 'Could not update document' });
+      });
+  } else {
+    res.status(500).json({ error: 'Not a valid document id' });
+  }
+});
